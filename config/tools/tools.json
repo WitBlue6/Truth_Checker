@@ -1,0 +1,35 @@
+{
+    "tool_groups":{
+        "mcp-tools":{
+            "name": "mcp-tools",
+            "description": "MCP工具",
+            "tools":["use_mcp_tool"]
+        },
+        "agent-tools":{
+            "name": "agent-tools",
+            "description": "智能体工具",
+            "tools":[]
+        },
+        "file-tools":{
+            "name": "file-tools",
+            "description": "文件工具",
+            "tools":[]
+        },
+        "command-tools":{
+            "name": "command-tools",
+            "description": "命令工具",
+            "tools":[]
+        }
+    },
+    "tools":{
+        "use_mcp_tool":{
+            "name": "use_mcp_tool",
+            "description": "使用MCP工具",
+            "instruction": "使用MCP工具来执行指定的操作",
+            "group": "mcp-tools",
+            "params":{
+                "timeout": 30000
+            }
+        }
+    }
+}

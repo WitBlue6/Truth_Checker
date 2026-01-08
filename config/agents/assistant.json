@@ -1,0 +1,10 @@
+{
+    "assistant":{
+        "name": "assistant",
+        "model": "default",
+        "description": "通用助手，可以处理各种任务",
+        "available_tools": ["agent-tools", "file-tools", "command-tools", "mcp-tools"],
+        "availabel_agents": [],
+        "system_prompt": "你是一个通用助手，可以处理各种任务。"
+    }
+}
