@@ -10,7 +10,8 @@ PROMPT_TO_AGENT_MAP = {
     "link_summary.md": "link_summary.json",
     "intent_classifier.md": "intent_classifier.json",
     "truth_judge_normative_explanatory.md": "truth_judge_normative_explanatory.json",
-    "anchor_split.md": "anchor_split.json"
+    "anchor_split.md": "anchor_split.json",
+    "final_truth.md": "final_truth.json"
 }
 
 def update_agent_prompt(prompt_file, agent_file):

@@ -130,8 +130,26 @@ Check the truth of every fact using the search result and reference info that pr
     res_content = call_agent("truth_judge", truth_judge_prompt)
     logger.info(f"Truth Check: {res_content}")
 
+    # 判断最终结果
+    final_prompt = f"""[FACT LIST]
+{fact_content}
+
+[TRUTH CHECK RESULT]
+{res_content}
+
+Task:
+Decide the final truth using the info.
+"""
+    # 调用truth_judge代理进行最终判断
+    final_content = call_agent("final_truth", final_prompt)
+    logger.info(f"Final Truth Check: {final_content}")
+    
+    # 从最终结果中解析出最终判断结果 TRUE/FALSE/UNCERTAIN
+    final_result = "TRUE" if "true" in final_content else "FALSE" if "false" in final_content else "UNCERTAIN"
+    
     return {
-        "truth": res_content,
+        "final_truth": final_result,
+        "final_truth_reason": final_content,
         "facts": fact_content,
         "link_info": link_info,
         "truth_reason": res_content,
@@ -278,7 +296,7 @@ Decide the final truth using the info.
     logger.info(f"\nTruth Result: {final_content}")
     
     # 从最终结果中解析出最终判断结果 TRUE/FALSE/UNCERTAIN
-    final_result = "TRUE" if "TRUE" in final_content else "FALSE" if "FALSE" in final_content else "UNCERTAIN"
+    final_result = "TRUE" if "true" in final_content else "FALSE" if "false" in final_content else "UNCERTAIN"
     
     return {
         "final_truth": final_result,
