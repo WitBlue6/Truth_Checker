@@ -4,11 +4,94 @@ import re
 import os
 import json
 import subprocess
+from inspect import signature
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
 # 从config模块导入配置加载函数
 from aichecker.config import load_mcp_config
+
+# 工具注册表，用于存储所有已注册的工具
+TOOL_REGISTRY = {}
+
+# 工具装饰器，用于自动注册工具
+def tool(name=None, description=None, group=None):
+    """工具装饰器，用于注册工具"""
+    def decorator(func):
+        tool_name = name or func.__name__
+        
+        # 生成工具的函数签名信息
+        sig = signature(func)
+        parameters = {}
+        required = []
+        
+        for param_name, param in sig.parameters.items():
+            param_info = {
+                "type": "string",  # 默认类型为string，可以根据需要扩展
+                "description": "参数描述"  # 可以从函数文档字符串中提取
+            }
+            
+            # 检查是否有默认值
+            if param.default is not param.empty:
+                param_info["default"] = param.default
+            else:
+                required.append(param_name)
+            
+            parameters[param_name] = param_info
+        
+        # 注册工具
+        TOOL_REGISTRY[tool_name] = {
+            "function": func,
+            "name": tool_name,
+            "description": description or func.__doc__ or "",
+            "group": group,
+            "parameters": parameters,
+            "required": required
+        }
+        
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
+
+# 执行注册的工具
+def execute_tool(tool_name, **kwargs):
+    """执行指定的工具"""
+    try:
+        if tool_name not in TOOL_REGISTRY:
+            return f"错误: 未知的工具 '{tool_name}'"
+        
+        tool_info = TOOL_REGISTRY[tool_name]
+        tool_func = tool_info["function"]
+        
+        logger.info(f"执行工具: {tool_name}")
+        logger.info(f"工具参数: {json.dumps(kwargs, ensure_ascii=False)}")
+        
+        result = tool_func(**kwargs)
+        
+        logger.info(f"工具执行完成")
+        return result
+    except Exception as e:
+        logger.error(f"工具调用失败: {str(e)}")
+        return f"工具调用失败: {str(e)}"
+
+# 获取所有注册的工具
+def get_all_tools():
+    """获取所有注册的工具"""
+    return TOOL_REGISTRY
+
+# 获取指定工具的信息
+def get_tool_info(tool_name):
+    """获取指定工具的信息"""
+    return TOOL_REGISTRY.get(tool_name)
+
+# 获取指定分组的工具
+def get_tools_by_group(group_name):
+    """获取指定分组的工具"""
+    return {name: info for name, info in TOOL_REGISTRY.items() if info["group"] == group_name}
 
 # 执行MCP工具命令
 def execute_mcp_tool(tool_name, input_data):
@@ -106,9 +189,24 @@ def clean_content(content):
     
     return content
 
+def extract_url_content(urls):
+    """提取URL内容的简化接口"""
+    return tavily_search(urls=urls)
+
 # 实现Tavily搜索和提取功能
+@tool(name="tavily_search", description="调用Tavily API进行搜索或URL内容提取", group="mcp-tools")
 def tavily_search(query=None, urls=None, extract_depth="advanced", format="markdown"):
-    """调用Tavily API进行搜索或URL内容提取"""
+    """调用Tavily API进行搜索或URL内容提取
+    
+    参数:
+    query (str, 可选): 搜索查询字符串。如果提供urls参数，则忽略此参数。
+    urls (list of str, 可选): 要提取内容的URL列表。如果提供query参数，则忽略此参数。
+    extract_depth (str, 可选): 提取深度，默认"advanced"。
+    format (str, 可选): 输出格式，默认"markdown"。
+    
+    返回:
+    str: 包含搜索结果或URL内容提取结果的字符串。
+    """
     try:
         # 获取Tavily API密钥
         mcp_config = load_mcp_config()
@@ -130,9 +228,6 @@ def tavily_search(query=None, urls=None, extract_depth="advanced", format="markd
             )
             response.raise_for_status()
             extract_result = response.json()
-            
-            # # 记录完整的API响应到日志
-            # logger.info(f"完整的URL提取结果JSON: {json.dumps(extract_result, ensure_ascii=False, indent=2)}")
             
             # 格式化提取结果
             result = "URL内容提取结果:\n"
@@ -173,18 +268,11 @@ def tavily_search(query=None, urls=None, extract_depth="advanced", format="markd
                                         'verify',
                                         'authentication']
                     is_blocked = any(keyword in raw_content for keyword in blocked_keywords)
-                    # 额外检测：如果内容中包含大量导航链接但缺少实际文章内容
-                    # 通过检测是否包含多个常见的网站导航关键词
-                    # navigation_keywords = ['登录', '注册', '购物车', '行业报告', '联系我们', '关于我们', '热门关键词']
-                    # nav_keyword_count = sum(1 for keyword in navigation_keywords if keyword in raw_content)
                     
-                    if is_blocked:  # 如果包含5个以上导航关键词，可能是被拦截
+                    if is_blocked:
                         result += f"内容:\n【访问被拦截】该网站已拦截当前IP的访问请求\n\n"
                     else:
                         cleaned_content = clean_content(raw_content)
-                        # # 如果还过长
-                        # if len(cleaned_content) > 8000:
-                        #     cleaned_content = cleaned_content[:8000] + "..."
                         result += f"内容:\n{cleaned_content}\n\n"
                     processed_urls.add(url)
             
@@ -242,6 +330,128 @@ def tavily_search(query=None, urls=None, extract_depth="advanced", format="markd
             return result
         return f"操作失败: {str(e)}"
 
-def extract_url_content(urls):
-    """提取URL内容的简化接口"""
-    return tavily_search(urls=urls)
+# 文件操作功能
+@tool(name="read_file", description="读取文件内容", group="file-tools")
+def read_file(file_path):
+    """读取文件内容
+    参数:
+    file_path (str): 要读取的文件路径
+    
+    返回:
+    str: 文件内容的字符串表示，或错误消息
+    """
+    try:
+        # 安全检查：只允许读取当前目录及其子目录的文件
+        file_path = os.path.abspath(file_path)
+        current_dir = os.path.abspath('.')
+        
+        if not file_path.startswith(current_dir):
+            return f"错误: 不允许读取当前目录外的文件"
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        logger.info(f"成功读取文件: {file_path}")
+        return content
+    except Exception as e:
+        logger.error(f"读取文件失败: {str(e)}")
+        return f"错误: {str(e)}"
+
+@tool(name="write_file", description="写入文件内容", group="file-tools")
+def write_file(file_path, content, overwrite=False):
+    """写入文件内容
+    参数:
+    file_path (str): 要写入的文件路径
+    content (str): 要写入的内容
+    overwrite (bool, 可选): 是否覆盖已存在文件，默认False
+    
+    返回:
+    str: 成功消息或错误消息
+    """
+    try:
+        # 安全检查：只允许写入当前目录及其子目录的文件
+        file_path = os.path.abspath(file_path)
+        current_dir = os.path.abspath('.')
+        
+        if not file_path.startswith(current_dir):
+            return f"错误: 不允许写入当前目录外的文件"
+        
+        # 检查文件是否存在
+        if os.path.exists(file_path) and not overwrite:
+            return f"错误: 文件已存在，请设置overwrite=True覆盖"
+        
+        # 创建目录（如果不存在）
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        logger.info(f"成功写入文件: {file_path}")
+        return f"成功写入文件: {file_path}"
+    except Exception as e:
+        logger.error(f"写入文件失败: {str(e)}")
+        return f"错误: {str(e)}"
+
+@tool(name="append_file", description="追加文件内容", group="file-tools")
+def append_file(file_path, content):
+    """追加文件内容
+    参数:
+    file_path (str): 要追加的文件路径
+    content (str): 要追加的内容
+    
+    返回:
+    str: 成功消息或错误消息
+    """
+    try:
+        # 安全检查：只允许操作当前目录及其子目录的文件
+        file_path = os.path.abspath(file_path)
+        current_dir = os.path.abspath('.')
+        
+        if not file_path.startswith(current_dir):
+            return f"错误: 不允许操作当前目录外的文件"
+        
+        # 创建目录（如果不存在）
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        with open(file_path, 'a', encoding='utf-8') as f:
+            f.write(content)
+        
+        logger.info(f"成功追加到文件: {file_path}")
+        return f"成功追加到文件: {file_path}"
+    except Exception as e:
+        logger.error(f"追加文件失败: {str(e)}")
+        return f"错误: {str(e)}"
+
+@tool(name="list_files", description="列出目录内容", group="file-tools")
+def list_files(directory):
+    """列出目录下的文件和子目录
+    参数:
+    directory (str): 要列出内容的目录路径
+    
+    返回:
+    str: 目录内容的字符串表示，或错误消息
+    """
+    try:
+        # 安全检查：只允许操作当前目录及其子目录
+        directory = os.path.abspath(directory)
+        current_dir = os.path.abspath('.')
+        
+        if not directory.startswith(current_dir):
+            return f"错误: 不允许操作当前目录外的文件"
+        
+        items = os.listdir(directory)
+        result = f"目录: {directory}\n"
+        result += "文件和子目录:\n"
+        
+        for item in items:
+            item_path = os.path.join(directory, item)
+            if os.path.isdir(item_path):
+                result += f"[目录] {item}\n"
+            else:
+                result += f"[文件] {item}\n"
+        
+        logger.info(f"成功列出目录: {directory}")
+        return result
+    except Exception as e:
+        logger.error(f"列出目录失败: {str(e)}")
+        return f"错误: {str(e)}"

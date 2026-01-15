@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 # 从config模块导入配置加载函数
 from aichecker.config import load_model_config, load_agent_config, load_mcp_config
-from aichecker.tools import tavily_search, execute_mcp_tool
+from aichecker.tools import TOOL_REGISTRY, execute_tool
 
 # 调用AI代理
 def call_agent(agent_name, prompt):
@@ -45,49 +45,35 @@ def call_agent(agent_name, prompt):
         }
         
         # 检查是否需要工具调用，如果需要才添加tools参数
-        agent_key = list(agent_config.keys())[0]  # 获取代理配置的键
-        if ("available_tools" in agent_config[agent_name] and "use_mcp_tool" in agent_config[agent_name]["available_tools"]) or "available_mcp_servers" in agent_config[agent_key]:
-            logger.info(f"{agent_name} 代理启用了工具调用功能")
-            payload["tools"] = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "use_mcp_tool",
-                        "description": "调用MCP服务器提供的外部工具",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                 "tool_name": {
-                                    "type": "string",
-                                    "description": "MCP服务器名称"
-                                },
-                                "query": {
-                                    "type": "string",
-                                    "description": "搜索查询词"
-                                },
-                                "urls": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "要提取内容的URL列表"
-                                },
-                                "extract_depth": {
-                                    "type": "string",
-                                    "description": "提取深度: basic或advanced",
-                                    "enum": ["basic", "advanced"]
-                                },
-                                "format": {
-                                    "type": "string",
-                                    "description": "输出格式: markdown或text",
-                                    "enum": ["markdown", "text"]
-                                }
-                            },
-                            "required": ["server_name"]
+        tools = []
+        agent_key = agent_name
+        
+        if ("available_tools" in agent_config[agent_key]):
+            logger.info(f"为 {agent_name} 代理添加工具...")
+            
+            for tool_name in agent_config[agent_key]["available_tools"]:
+                if tool_name in TOOL_REGISTRY:
+                    tool_info = TOOL_REGISTRY[tool_name]
+                    
+                    # 构建工具定义
+                    tool_def = {
+                        "type": "function",
+                        "function": {
+                            "name": tool_info["name"],
+                            "description": tool_info["description"],
+                            "parameters": {
+                                "type": "object",
+                                "properties": tool_info["parameters"],
+                                "required": tool_info["required"]
+                            }
                         }
                     }
-                }
-            ]
+                    tools.append(tool_def)
+        
+        # 如果有工具，添加到payload
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"  # 让模型自动选择是否调用工具
         
         # 处理工具调用的循环
         call_count = 0
@@ -111,73 +97,17 @@ def call_agent(agent_name, prompt):
             result = response.json()
             message = result["choices"][0]["message"]
             
-            logger.info(f"收到响应，角色: {message['role']}")
-            
             # 检查是否有工具调用
             if "tool_calls" in message:
-                tool_call = message["tool_calls"][0]
-                function_name = tool_call["function"]["name"]
-                function_args = json.loads(tool_call["function"]["arguments"])
-                
-                logger.info(f"检测到工具调用: {function_name}")
-                logger.info(f"模型调用的工具参数: {json.dumps(function_args, ensure_ascii=False)}")
-                
-                if function_name == "use_mcp_tool":
-                    server_name = function_args.get("server_name") or function_args.get("tool_name", "ddg-search")
-                    query = function_args.get("query")
-                    urls = function_args.get("urls")
-                    extract_depth = function_args.get("extract_depth", "advanced")
-                    format = function_args.get("format", "markdown")
+                for tool_call in message["tool_calls"]:
+                    function_name = tool_call["function"]["name"]
+                    function_args = json.loads(tool_call["function"]["arguments"])
                     
-                    # 验证server_name是否为有效的MCP工具名称
-                    valid_mcp_tools = list(mcp_config['mcpServers'].keys())
-                    if server_name not in valid_mcp_tools:
-                        logger.warning(f"无效的MCP工具名称: '{server_name}', 有效工具: {valid_mcp_tools}")
-                        # 使用默认工具名称
-                        server_name = "ddg-search"
-                        logger.warning(f"已自动切换到默认工具: {server_name}")
+                    logger.info(f"检测到工具调用: {function_name}")
+                    logger.info(f"模型调用的工具参数: {json.dumps(function_args, ensure_ascii=False)}")
                     
-                    # 调用工具函数
-                    logger.info(f"开始执行工具: {function_name}")
-                    
-                    # 如果是tavily工具，使用原有的tavily_search函数保持兼容性
-                    if server_name == "tavily":
-                        tool_result = tavily_search(query, urls, extract_depth, format)
-                    elif server_name == "ddg-search":
-                        # 处理DDG Search工具的特殊情况
-                        if query:
-                            # 使用search方法
-                            tool_input = {
-                                "tool_name": "search",
-                                "query": query,
-                                "max_results": 10  # 默认返回10个结果
-                            }
-                            logger.info(f"工具输入: {json.dumps(tool_input, ensure_ascii=False)}")
-                            tool_result = execute_mcp_tool(server_name, tool_input)
-                        elif urls:
-                            # 使用fetch_content方法，逐个处理URL
-                            results = []
-                            for url in urls:
-                                tool_input = {
-                                    "tool_name": "fetch_content",
-                                    "url": url
-                                }
-                                logger.info(f"工具输入: {json.dumps(tool_input, ensure_ascii=False)}")
-                                url_result = execute_mcp_tool(server_name, tool_input)
-                                results.append(f"URL: {url}\nContent:\n{url_result}")
-                            tool_result = "\n" + "\n" + "\n".join(results) + "\n"
-                        else:
-                            tool_result = "错误：DDG搜索需要提供query或url参数"
-                    else:
-                        # 其他工具的默认处理
-                        tool_input = {}
-                        if query:
-                            tool_input["query"] = query
-                        if urls:
-                            tool_input["urls"] = urls
-                        
-                        logger.info(f"工具输入: {json.dumps(tool_input, ensure_ascii=False)}")
-                        tool_result = execute_mcp_tool(server_name, tool_input)
+                    # 执行工具
+                    tool_result = execute_tool(function_name, **function_args)
                     
                     logger.info(f"工具执行完成，结果:\n{tool_result}")
                     
@@ -190,19 +120,11 @@ def call_agent(agent_name, prompt):
                         "name": function_name,
                         "content": tool_result
                     })
-                else:
-                    logger.warning(f"未知的工具: {function_name}")
-                    break
             else:
                 # 没有工具调用，直接获取结果
                 logger.info(f"=== 代理 {agent_name} 调用完成 ===")
                 logger.info(f"响应内容:\n{message['content']}")
                 return message["content"]
-        
-        # 返回AI响应
-        logger.info(f"=== 代理 {agent_name} 调用完成 ===")
-        logger.info(f"响应内容:\n{message['content']}")
-        return message["content"]
         
     except Exception as e:
         logger.error(f"=== 代理 {agent_name} 调用失败 ===")

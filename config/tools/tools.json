@@ -13,7 +13,7 @@
         "file-tools":{
             "name": "file-tools",
             "description": "文件工具",
-            "tools":[]
+            "tools":["read_file", "write_file", "append_file", "list_files"]
         },
         "command-tools":{
             "name": "command-tools",
@@ -29,6 +29,43 @@
             "group": "mcp-tools",
             "params":{
                 "timeout": 30000
+            }
+        },
+        "read_file":{
+            "name": "read_file",
+            "description": "读取文件内容",
+            "instruction": "读取指定文件的内容",
+            "group": "file-tools",
+            "params":{
+                "timeout": 5000
+            }
+        }
+        ,
+        "write_file":{
+            "name": "write_file",
+            "description": "写入文件内容",
+            "instruction": "将内容写入指定文件",
+            "group": "file-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "append_file":{
+            "name": "append_file",
+            "description": "追加文件内容",
+            "instruction": "将内容追加到指定文件末尾",
+            "group": "file-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "list_files":{
+            "name": "list_files",
+            "description": "列出目录内容",
+            "instruction": "列出指定目录下的文件和子目录",
+            "group": "file-tools",
+            "params":{
+                "timeout": 5000
             }
         }
     }
