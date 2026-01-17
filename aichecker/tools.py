@@ -67,12 +67,12 @@ def execute_tool(tool_name, **kwargs):
         tool_info = TOOL_REGISTRY[tool_name]
         tool_func = tool_info["function"]
         
-        logger.info(f"执行工具: {tool_name}")
-        logger.info(f"工具参数: {json.dumps(kwargs, ensure_ascii=False)}")
+        logger.debug(f"执行工具: {tool_name}")
+        logger.debug(f"工具参数: {json.dumps(kwargs, ensure_ascii=False)}")
         
         result = tool_func(**kwargs)
         
-        logger.info(f"工具执行完成")
+        logger.debug(f"工具执行完成")
         return result
     except Exception as e:
         logger.error(f"工具调用失败: {str(e)}")
@@ -114,8 +114,8 @@ def execute_mcp_tool(tool_name, input_data):
             env[key] = value
         
         # 执行命令
-        logger.info(f"执行MCP命令: {cmd}")
-        logger.info(f"命令输入: {json.dumps(input_data, ensure_ascii=False)}")
+        logger.debug(f"执行MCP命令: {cmd}")
+        logger.debug(f"命令输入: {json.dumps(input_data, ensure_ascii=False)}")
         
         process = subprocess.run(
             cmd,
@@ -131,7 +131,7 @@ def execute_mcp_tool(tool_name, input_data):
         else:
             result = process.stderr.decode('utf-8') if process.stderr else "命令执行成功但无输出"
         
-        logger.info(f"工具结果:\n{result}")
+        logger.debug(f"工具结果:\n{result}")
         return result
     except Exception as e:
         logger.error(f"MCP工具调用失败: {str(e)}")
@@ -301,7 +301,7 @@ def tavily_search(query=None, urls=None, extract_depth="advanced", format="markd
             search_result = response.json()
             
             # 记录完整的搜索结果到日志
-            logger.info(f"完整的搜索结果JSON: {json.dumps(search_result, ensure_ascii=False, indent=2)}")
+            logger.debug(f"完整的搜索结果JSON: {json.dumps(search_result, ensure_ascii=False, indent=2)}")
             
             # 格式化搜索结果
             if "answer" in search_result and search_result["answer"]:
@@ -367,7 +367,7 @@ def read_file(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        logger.info(f"成功读取文件: {file_path}")
+        logger.debug(f"成功读取文件: {file_path}")
         return content
     except Exception as e:
         logger.error(f"读取文件失败: {str(e)}")
@@ -402,7 +402,7 @@ def write_file(file_path, content, overwrite=False):
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        logger.info(f"成功写入文件: {file_path}")
+        logger.debug(f"成功写入文件: {file_path}")
         return f"成功写入文件: {file_path}"
     except Exception as e:
         logger.error(f"写入文件失败: {str(e)}")
@@ -432,7 +432,7 @@ def append_file(file_path, content):
         with open(file_path, 'a', encoding='utf-8') as f:
             f.write(content)
         
-        logger.info(f"成功追加到文件: {file_path}")
+        logger.debug(f"成功追加到文件: {file_path}")
         return f"成功追加到文件: {file_path}"
     except Exception as e:
         logger.error(f"追加文件失败: {str(e)}")
@@ -482,7 +482,7 @@ def list_files(directory, depth=1):
         for line in list_dir_recursive(directory, 1):
             result += line
         
-        logger.info(f"成功列出目录: {directory} (递归深度: {depth})")
+        logger.debug(f"成功列出目录: {directory} (递归深度: {depth})")
         return result
     except Exception as e:
         logger.error(f"列出目录失败: {str(e)}")

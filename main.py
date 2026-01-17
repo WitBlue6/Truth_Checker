@@ -2,6 +2,7 @@ from aichecker.workflow import aichecker_workflow
 from aichecker.agents import call_agent_with_memory
 import logging
 import argparse
+import uuid
 
 # 配置日志格式
 log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -9,18 +10,18 @@ date_format = '%Y-%m-%d %H:%M:%S'
 
 # 配置根日志记录器
 root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
+root_logger.setLevel(logging.DEBUG)
 
 # 添加文件处理器
 file_handler = logging.FileHandler('./output/checker.log', mode='a')
-file_handler.setLevel(logging.INFO)
+file_handler.setLevel(logging.DEBUG)
 file_formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
 file_handler.setFormatter(file_formatter)
 root_logger.addHandler(file_handler)
 
 # 添加控制台处理器
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.WARNING)
 console_formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
 console_handler.setFormatter(console_formatter)
 root_logger.addHandler(console_handler)
@@ -41,11 +42,11 @@ def main():
     
     # 通用agent模式
     agent_parser = subparsers.add_parser('agent', help='通用agent模式')
-    agent_parser.add_argument('-p', '--prompt', required=True, help='传递给agent的提示')
+    agent_parser.add_argument('-p', '--prompt', help='无头模式，传递给agent的prompt（可选，如果不提供则进入交互式模式）')
     agent_parser.add_argument('-a', '--agent', default='assistant', help='指定使用的agent（默认：assistant）')
     agent_parser.add_argument('-m', '--memory', help='指定记忆ID（可选）')
-    agent_parser.add_argument('--max-tool-calls', type=int, default=5, help='每轮对话的最大工具调用次数（默认：5）')
-    agent_parser.add_argument('--max-repeated-calls', type=int, default=3, help='连续重复调用相同工具的最大次数（默认：3）')
+    agent_parser.add_argument('--max-tool-calls', type=int, default=30, help='每轮对话的最大工具调用次数（默认：30）')
+    agent_parser.add_argument('--max-repeated-calls', type=int, default=5, help='连续相同参数重复调用相同工具的最大次数（默认：5）')
     
     # 解析命令行参数
     args = parser.parse_args()
@@ -57,14 +58,60 @@ def main():
         print(res)
     elif args.mode == 'agent':
         # 通用agent模式
-        res = call_agent_with_memory(
-            args.agent, 
-            args.prompt, 
-            args.memory,
-            max_tool_calls_per_round=args.max_tool_calls,
-            max_repeated_tool_calls=args.max_repeated_calls
-        )
-        print(res)
+        
+        # 如果没有提供记忆ID，生成一个新的
+        if not args.memory:
+            memory_id = f"memory_{uuid.uuid4().hex[:8]}"
+            print(f"生成新的记忆ID: {memory_id}")
+        else:
+            memory_id = args.memory
+            print(f"使用指定的记忆ID: {memory_id}")
+        
+        # 如果提供了初始提示，先执行一次
+        if args.prompt:
+            res = call_agent_with_memory(
+                args.agent, 
+                args.prompt, 
+                memory_id,
+                max_tool_calls_per_round=args.max_tool_calls,
+                max_repeated_tool_calls=args.max_repeated_calls
+            )
+            print("\n=== Agent 回复 ===")
+            print(res)
+        
+        # 进入交互式模式
+        print("\n=== 进入交互式模式 ===")
+        print("输入消息与Agent对话，输入 ':q' 结束对话")
+        print("-" * 50)
+        
+        while True:
+            # 获取用户输入
+            try:
+                user_input = input(f"\n当前记忆ID: {memory_id} \n用户: ")
+            except EOFError:
+                print("\n输入结束，退出对话")
+                break
+            
+            # 检查是否退出
+            if user_input.strip() == ":q":
+                print("\n退出对话")
+                break
+            
+            # 调用Agent处理用户输入
+            try:
+                res = call_agent_with_memory(
+                    args.agent, 
+                    user_input, 
+                    memory_id,
+                    max_tool_calls_per_round=args.max_tool_calls,
+                    max_repeated_tool_calls=args.max_repeated_calls
+                )
+                print("\n=== Agent 回复 ===")
+                print(res)
+                print("-" * 50)
+            except Exception as e:
+                print(f"\n发生错误: {str(e)}")
+                print("-" * 50)
     else:
         # 如果没有指定模式，显示帮助信息
         parser.print_help()

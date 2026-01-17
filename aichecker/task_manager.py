@@ -28,7 +28,7 @@ def save_task_list(task_list_id: str, task_list_content: Dict) -> None:
     task_file = os.path.join(TASKS_DIR, f"{task_list_id}.json")
     with open(task_file, 'w', encoding='utf-8') as f:
         json.dump(task_list_content, f, ensure_ascii=False, indent=2)
-    logger.info(f"任务列表已保存到文件: {task_file}")
+    logger.debug(f"任务列表已保存到文件: {task_file}")
 
 # 加载任务列表从文件
 def load_task_list(task_list_id: str) -> Optional[Dict]:
@@ -36,10 +36,10 @@ def load_task_list(task_list_id: str) -> Optional[Dict]:
     if os.path.exists(task_file):
         with open(task_file, 'r', encoding='utf-8') as f:
             task_list_content = json.load(f)
-        logger.info(f"从文件加载任务列表: {task_file}")
+        logger.debug(f"从文件加载任务列表: {task_file}")
         return task_list_content
     else:
-        logger.info(f"任务列表文件不存在: {task_file}")
+        logger.debug(f"任务列表文件不存在: {task_file}")
         return None
 
 # 创建任务列表
@@ -124,7 +124,7 @@ def update_task_status(task_list_id: str, task_id: int, status: str, result: str
     # 保存更新后的任务列表
     save_task_list(task_list_id, task_list)
     
-    logger.info(f"更新了任务状态: 任务列表={task_list_id}, 任务ID={task_id}, 状态={status}")
+    logger.debug(f"更新了任务状态: 任务列表={task_list_id}, 任务ID={task_id}, 状态={status}")
     return f"任务 {task_id} 的状态已更新为 {status}。"
 
 # 添加新任务 - 注册为工具
@@ -172,7 +172,7 @@ def add_task(task_list_id: str, task_description: str) -> str:
     # 保存更新后的任务列表
     save_task_list(task_list_id, task_list)
     
-    logger.info(f"添加了新任务: 任务列表={task_list_id}, 任务ID={new_task_id}, 描述={task_description}")
+    logger.debug(f"添加了新任务: 任务列表={task_list_id}, 任务ID={new_task_id}, 描述={task_description}")
     return f"已添加新任务 {new_task_id}：{task_description}"
 
 # 获取任务列表 - 注册为工具
@@ -277,7 +277,7 @@ def get_task(prompt, messages, model_config, memory_id):
             
         用户请求: {prompt}
             
-        请以JSON格式返回任务列表，每个任务包含description字段（任务描述），不要包含其他字段。
+        请以JSON数组格式返回任务列表，每个任务包含description字段（任务描述），不要包含其他字段。
         例如:
         用户输入：帮我生成这个项目的README文件
         输出：
@@ -313,7 +313,7 @@ def get_task(prompt, messages, model_config, memory_id):
         # 解析任务列表
         result = response.json()
         task_list_content = result["choices"][0]["message"]["content"]
-        logger.info(f"生成的任务列表内容: {task_list_content}")
+        logger.debug(f"生成的任务列表内容: {task_list_content}")
             
         try:
             # 尝试解析JSON格式的任务列表

@@ -32,19 +32,19 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
         if not memory_id:
             import uuid
             memory_id = f"memory_{uuid.uuid4().hex[:8]}"
-            logger.info(f"未提供记忆ID，生成新的记忆ID: {memory_id}")
+            logger.debug(f"未提供记忆ID，生成新的记忆ID: {memory_id}")
         
         logger.info(f"=== 开始调用代理: {agent_name} (记忆ID: {memory_id}) ===")
         
         # 加载配置
-        logger.info(f"加载 {agent_name} 代理配置...")
+        logger.debug(f"加载 {agent_name} 代理配置...")
         config = load_model_config()
         agent_config = load_agent_config(agent_name)
         mcp_config = load_mcp_config()
         
         # 构建请求数据
         model_config = config["models"]["default"]
-        logger.info(f"使用模型: {model_config['name']}")
+        logger.debug(f"使用模型: {model_config['name']}")
         
         # 加载记忆
         memory_content = load_memory(memory_id)
@@ -71,6 +71,7 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
         
         # 添加当前用户提示
         messages.append({"role": "user", "content": prompt})
+        memory_content.append({"role": "user", "content": prompt})
         
         payload = {
             "model": model_config["name"],
@@ -84,7 +85,7 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
         agent_key = agent_name
         
         if ("available_tools" in agent_config[agent_key]):
-            logger.info(f"为 {agent_name} 代理添加工具...")
+            logger.debug(f"为 {agent_name} 代理添加工具...")
             
             for tool_spec in agent_config[agent_key]["available_tools"]:
                 # 检查是否是工具组
@@ -126,7 +127,7 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
                     tools.append(tool_def)
         
         # 如果有工具，添加到payload
-        logger.info(f"为 {agent_name} 代理添加的工具: {tools}")
+        logger.debug(f"为 {agent_name} 代理添加的工具: {tools}")
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"  # 让模型自动选择是否调用工具
@@ -141,10 +142,10 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
         
         while True:
             call_count += 1
-            logger.info(f"=== 发送第 {call_count} 次请求到 AI 模型 ===")
+            logger.debug(f"=== 发送第 {call_count} 次请求到 AI 模型 ===")
             
             # 发送请求到AI模型API
-            logger.info(f"请求URL: {model_config['base_url']}/chat/completions")
+            logger.debug(f"请求URL: {model_config['base_url']}/chat/completions")
             response = requests.post(
                 f"{model_config['base_url']}/chat/completions",
                 headers={
@@ -164,18 +165,18 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
                 # 增加工具调用计数
                 tool_call_count += 1
                 
-                # # 检查本对话轮次的工具调用次数是否超过限制
-                # if tool_call_count > max_tool_calls_per_round:
-                #     logger.warning(f"本轮对话工具调用次数超过限制 ({max_tool_calls_per_round})，建议简化请求")
-                #     # 不直接终止，而是继续，但提示模型简化
-                #     payload["messages"].append(message)
-                #     payload["messages"].append({
-                #         "role": "tool",
-                #         "tool_call_id": "system_warning",
-                #         "name": "system",
-                #         "content": f"工具调用次数已达本轮限制 ({max_tool_calls_per_round})，请尝试直接回答用户问题，或使用更精简的工具调用序列。"
-                #     })
-                #     continue
+                # 检查本对话轮次的工具调用次数是否超过限制
+                if tool_call_count > max_tool_calls_per_round:
+                    logger.warning(f"本轮对话工具调用次数超过限制 ({max_tool_calls_per_round})，建议简化请求")
+                    # 不直接终止，而是继续，但提示模型简化
+                    payload["messages"].append(message)
+                    payload["messages"].append({
+                        "role": "tool",
+                        "tool_call_id": "system_warning",
+                        "name": "system",
+                        "content": f"工具调用次数已达本轮限制 ({max_tool_calls_per_round})，请尝试直接回答用户问题，或使用更精简的工具调用序列。"
+                    })
+                    continue
                 
                 for tool_call in message["tool_calls"]:
                     function_name = tool_call["function"]["name"]
@@ -207,7 +208,7 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
                     # 添加到工具调用历史
                     tool_call_history.append(tool_call_key)
                     
-                    logger.info(f"检测到工具调用: {function_name}")
+                    logger.debug(f"检测到工具调用: {function_name}")
                     logger.info(f"模型调用的工具参数: {json.dumps(function_args, ensure_ascii=False)}")
                     
                     # 执行工具
@@ -216,13 +217,18 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
                     logger.info(f"工具执行完成，结果:\n{tool_result}")
                     
                     # 将工具调用结果添加到对话历史
-                    logger.info(f"将工具调用结果添加到对话历史")
+                    logger.debug(f"将工具调用结果添加到对话历史")
                     payload["messages"].append(message)
                     payload["messages"].append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
                         "name": function_name,
                         "content": tool_result
+                    })
+                    # 更新记忆，保留工具返回结果
+                    memory_content.append({
+                        "role": "tool",
+                        "content": f"工具调用 {function_name} \n参数{json.dumps(function_args, ensure_ascii=False)}\n返回结果:\n{tool_result[:150]}..."
                     })
             else:
                 # 没有工具调用，直接获取结果
@@ -233,7 +239,6 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
                 updated_memory = memory_content
                 
                 # 只添加当前对话的用户和助手消息到记忆
-                updated_memory.append({"role": "user", "content": prompt})
                 updated_memory.append({"role": "assistant", "content": message["content"]})
                 
                 # 保存更新后的记忆
