@@ -19,6 +19,11 @@
             "name": "command-tools",
             "description": "命令工具",
             "tools":[]
+        },
+        "task-tools":{
+            "name": "task-tools",
+            "description": "任务工具",
+            "tools":["add_task", "update_task_status", "get_task_list"]
         }
     },
     "tools":{
@@ -64,6 +69,33 @@
             "description": "列出目录内容",
             "instruction": "列出指定目录下的文件和子目录",
             "group": "file-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "add_task":{
+            "name": "add_task",
+            "description": "添加任务",
+            "instruction": "添加一个新任务",
+            "group": "task-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "update_task_status":{
+            "name": "update_task_status",
+            "description": "更新任务状态",
+            "instruction": "更新指定任务的状态",
+            "group": "task-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "get_task_list":{
+            "name": "get_task_list",
+            "description": "获取任务列表",
+            "instruction": "获取所有任务的列表",
+            "group": "task-tools",
             "params":{
                 "timeout": 5000
             }

@@ -1,5 +1,5 @@
 from aichecker.workflow import aichecker_workflow
-from aichecker.agents import call_agent
+from aichecker.agents import call_agent_with_memory
 import logging
 import argparse
 
@@ -43,6 +43,9 @@ def main():
     agent_parser = subparsers.add_parser('agent', help='通用agent模式')
     agent_parser.add_argument('-p', '--prompt', required=True, help='传递给agent的提示')
     agent_parser.add_argument('-a', '--agent', default='assistant', help='指定使用的agent（默认：assistant）')
+    agent_parser.add_argument('-m', '--memory', help='指定记忆ID（可选）')
+    agent_parser.add_argument('--max-tool-calls', type=int, default=5, help='每轮对话的最大工具调用次数（默认：5）')
+    agent_parser.add_argument('--max-repeated-calls', type=int, default=3, help='连续重复调用相同工具的最大次数（默认：3）')
     
     # 解析命令行参数
     args = parser.parse_args()
@@ -54,7 +57,13 @@ def main():
         print(res)
     elif args.mode == 'agent':
         # 通用agent模式
-        res = call_agent(args.agent, args.prompt)
+        res = call_agent_with_memory(
+            args.agent, 
+            args.prompt, 
+            args.memory,
+            max_tool_calls_per_round=args.max_tool_calls,
+            max_repeated_tool_calls=args.max_repeated_calls
+        )
         print(res)
     else:
         # 如果没有指定模式，显示帮助信息

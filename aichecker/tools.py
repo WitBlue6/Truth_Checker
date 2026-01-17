@@ -348,6 +348,22 @@ def read_file(file_path):
         if not file_path.startswith(current_dir):
             return f"错误: 不允许读取当前目录外的文件"
         
+        if not os.path.exists(file_path):
+            # 获取目录路径
+            dir_path = os.path.dirname(file_path)
+            # 获取文件名
+            filename = os.path.basename(file_path)
+            
+            error_msg = f"错误: 文件 '{file_path}' 不存在\n"
+            
+            # 如果目录存在，建议使用list_files查看目录内容
+            if os.path.exists(dir_path):
+                error_msg += "建议：\n"
+                error_msg += f"1. 使用 list_files('{dir_path}') 查看该目录下的文件和子目录\n"
+                error_msg += f"2. 检查文件名是否拼写错误，当前文件名: {filename}\n"
+            
+            return error_msg
+        
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
@@ -423,10 +439,11 @@ def append_file(file_path, content):
         return f"错误: {str(e)}"
 
 @tool(name="list_files", description="列出目录内容", group="file-tools")
-def list_files(directory):
+def list_files(directory, depth=1):
     """列出目录下的文件和子目录
     参数:
     directory (str): 要列出内容的目录路径
+    depth (int, 可选): 递归查看子目录的深度，默认1（只查看当前目录），最大支持3
     
     返回:
     str: 目录内容的字符串表示，或错误消息
@@ -439,18 +456,33 @@ def list_files(directory):
         if not directory.startswith(current_dir):
             return f"错误: 不允许操作当前目录外的文件"
         
-        items = os.listdir(directory)
+        # 限制最大递归深度，避免信息过载
+        max_depth = 3
+        if depth < 1 or depth > max_depth:
+            return f"错误: 递归深度必须在1到{max_depth}之间"
+        
         result = f"目录: {directory}\n"
+        result += f"递归深度: {depth}\n"
         result += "文件和子目录:\n"
         
-        for item in items:
-            item_path = os.path.join(directory, item)
-            if os.path.isdir(item_path):
-                result += f"[目录] {item}\n"
-            else:
-                result += f"[文件] {item}\n"
+        def list_dir_recursive(dir_path, current_depth, indent=""):
+            """递归列出目录内容"""
+            items = os.listdir(dir_path)
+            for item in items:
+                item_path = os.path.join(dir_path, item)
+                if os.path.isdir(item_path):
+                    yield f"{indent}[目录] {item}\n"
+                    if current_depth < depth:
+                        # 递归查看子目录
+                        yield from list_dir_recursive(item_path, current_depth + 1, indent + "  ")
+                else:
+                    yield f"{indent}[文件] {item}\n"
         
-        logger.info(f"成功列出目录: {directory}")
+        # 调用递归函数生成目录列表
+        for line in list_dir_recursive(directory, 1):
+            result += line
+        
+        logger.info(f"成功列出目录: {directory} (递归深度: {depth})")
         return result
     except Exception as e:
         logger.error(f"列出目录失败: {str(e)}")
