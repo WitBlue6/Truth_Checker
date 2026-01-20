@@ -18,7 +18,7 @@
         "command-tools":{
             "name": "command-tools",
             "description": "命令工具",
-            "tools":[]
+            "tools":["ripgrep", "execute_command"]
         },
         "task-tools":{
             "name": "task-tools",
@@ -96,6 +96,24 @@
             "description": "获取任务列表",
             "instruction": "获取所有任务的列表",
             "group": "task-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "ripgrep":{
+            "name": "ripgrep",
+            "description": "ripgrep搜索",
+            "instruction": "使用ripgrep搜索指定目录下的文件内容",
+            "group": "command-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "execute_command":{
+            "name": "execute_command",
+            "description": "执行命令",
+            "instruction": "执行指定的shell命令",
+            "group": "command-tools",
             "params":{
                 "timeout": 5000
             }

@@ -487,3 +487,128 @@ def list_files(directory, depth=1):
     except Exception as e:
         logger.error(f"列出目录失败: {str(e)}")
         return f"错误: {str(e)}"
+    
+@tool(name="execute_command", description="执行命令行命令", group="command-tools")
+def execute_command(command, args=None, cwd=".", timeout=30, capture_output=True):
+    """
+    执行命令行命令
+    
+    参数:
+    command (str): 要执行的命令
+    args (str): 命令参数，多个参数用空格分隔，默认为None
+    cwd (str): 命令执行的工作目录，默认为当前目录
+    timeout (int): 命令执行的超时时间（秒），默认为30
+    capture_output (bool): 是否捕获命令输出，默认为True
+    
+    返回:
+    str: 命令执行结果的字符串表示
+    """
+    try:
+        # 安全检查：禁止执行的危险命令列表
+        dangerous_commands = ['rm', 'mv', 'cp', 'chmod', 'chown', 'sudo', 'su', 'passwd', 
+                              'shutdown', 'reboot', 'rmdir', 'dd', 'mkfs', 'format']
+        
+        # 检查命令是否在危险列表中
+        if command in dangerous_commands:
+            return f"错误: 禁止执行危险命令 '{command}'，以保护系统安全"
+        
+        # 构建命令列表
+        cmd_list = [command]
+        if args:
+            cmd_list.extend(args.split())
+        
+        # 执行命令
+        result = subprocess.run(
+            cmd_list,
+            cwd=cwd,
+            timeout=timeout,
+            capture_output=capture_output,
+            text=True,
+            check=True
+        )
+        
+        # 处理结果
+        output = ""
+        if capture_output:
+            if result.stdout:
+                output += f"标准输出:\n{result.stdout}\n\n"
+            if result.stderr:
+                output += f"标准错误:\n{result.stderr}\n\n"
+        
+        output += f"命令执行成功，返回码: {result.returncode}"
+        return output
+        
+    except subprocess.TimeoutExpired:
+        return f"错误: 命令执行超时（超过 {timeout} 秒）"
+    except subprocess.CalledProcessError as e:
+        error_output = f"错误: 命令执行失败，返回码: {e.returncode}\n"
+        if capture_output:
+            if e.stdout:
+                error_output += f"标准输出:\n{e.stdout}\n"
+            if e.stderr:
+                error_output += f"标准错误:\n{e.stderr}\n"
+        return error_output
+    except FileNotFoundError:
+        return f"错误: 未找到命令 '{command}'"
+    except Exception as e:
+        return f"错误: {str(e)}"
+    
+@tool(name="ripgrep", description="使用ripgrep在文件中搜索文本", group="command-tools")
+def ripgrep(pattern, path=".", file_types=None, ignore_case=False, invert_match=False, show_line_numbers=True, max_results=100):
+    """
+    使用ripgrep在文件中搜索文本
+    
+    参数:
+    pattern (str): 要搜索的正则表达式模式
+    path (str): 搜索路径，默认为当前目录
+    file_types (str): 要搜索的文件类型（如"py,js"），默认为所有文件
+    ignore_case (bool): 是否忽略大小写，默认为False
+    invert_match (bool): 是否返回不匹配的行，默认为False
+    show_line_numbers (bool): 是否显示行号，默认为True
+    max_results (int): 最大返回结果数，默认为100
+    
+    返回:
+    str: 搜索结果的字符串表示
+    """
+    try:
+        # 构建ripgrep命令
+        cmd = ["rg"]
+        
+        # 添加参数
+        if ignore_case:
+            cmd.append("-i")
+        if invert_match:
+            cmd.append("-v")
+        if show_line_numbers:
+            cmd.append("-n")
+        if file_types:
+            cmd.extend(["-t", file_types])
+        
+        # 限制结果数量
+        cmd.extend(["-m", str(max_results)])
+        
+        # 添加搜索模式和路径
+        cmd.append(pattern)
+        cmd.append(path)
+        
+        # 执行命令
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # 处理结果
+        output = result.stdout
+        if not output:
+            return "未找到匹配的结果"
+        
+        return f"搜索结果 (模式: {pattern}, 路径: {path}):\n\n{output}"
+    except subprocess.CalledProcessError as e:
+        # ripgrep在未找到匹配时返回非零退出码，但这不是错误
+        if e.returncode == 1:
+            return "未找到匹配的结果"
+        return f"ripgrep执行失败: {e.stderr}"
+    except Exception as e:
+        return f"错误: {str(e)}"
