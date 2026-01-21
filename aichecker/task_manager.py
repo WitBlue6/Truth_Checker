@@ -17,7 +17,8 @@ TASK_STATUS = {
     "TODO": "待完成",
     "IN_PROGRESS": "进行中",
     "COMPLETED": "已完成",
-    "SKIPPED": "已跳过"
+    "SKIPPED": "已跳过",
+    "FAILED": "失败"
 }
 
 # 保存任务列表到文件
@@ -206,7 +207,8 @@ def task_list_to_text(task_list: Dict) -> str:
             TASK_STATUS["TODO"]: "⏳",
             TASK_STATUS["IN_PROGRESS"]: "🔄",
             TASK_STATUS["COMPLETED"]: "✅",
-            TASK_STATUS["SKIPPED"]: "⏭️"
+            TASK_STATUS["SKIPPED"]: "⏭️",
+            TASK_STATUS["FAILED"]: "❌"
         }.get(task["status"], "")
         
         text += f"{status_emoji} **任务 {task['id']}**: {task['description']}\n"
@@ -273,12 +275,16 @@ def get_task(prompt, messages, model_config, memory_id):
     if not task_list_id:
         # 调用模型生成初始任务列表
         task_generation_prompt = f"""
-        请为用户的请求生成一个详细的任务列表，将复杂任务分解为简单的子任务。
-            
+        ## 输入
         用户请求: {prompt}
-            
+        ## 工作流程
+        1. 理解用户请求，确定用户需要完成的任务
+        2. 分析用户请求，判断是否需要分解任务
+        3. 如果需要分解，将复杂任务分解为简单的子任务
+        4. 如果不需要分解，直接返回该任务或用户请求中的任务    
+        ## 输出
         请以JSON数组格式返回任务列表，每个任务包含description字段（任务描述），不要包含其他字段。
-        例如:
+        ### 示例1
         用户输入：帮我生成这个项目的README文件
         输出：
         [
@@ -286,6 +292,12 @@ def get_task(prompt, messages, model_config, memory_id):
             "根据目录结构，查看项目的主要文件夹和文件内容",
             "根据文件内容，总结项目的主要功能和技术栈",
             "根据总结，生成README文件的内容"
+        ]
+        ### 示例2
+        用户输入：查询上海的天气
+        输出：
+        [
+            "使用联网工具或其他方式查询上海天气"
         ]
         """
             

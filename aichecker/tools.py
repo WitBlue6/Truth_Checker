@@ -194,7 +194,7 @@ def extract_url_content(urls):
     return tavily_search(urls=urls)
 
 # 实现Tavily搜索和提取功能
-@tool(name="tavily_search", description="调用Tavily API进行搜索或URL内容提取", group="mcp-tools")
+@tool(name="tavily_search", description="调用Tavily进行联网搜索或URL内容提取", group="mcp-tools")
 def tavily_search(query=None, urls=None, extract_depth="advanced", format="markdown"):
     """调用Tavily API进行搜索或URL内容提取
     
@@ -494,7 +494,7 @@ def execute_command(command, args=None, cwd=".", timeout=30, capture_output=True
     执行命令行命令
     
     参数:
-    command (str): 要执行的命令
+    command (str): 要执行的命令（可以包含参数）
     args (str): 命令参数，多个参数用空格分隔，默认为None
     cwd (str): 命令执行的工作目录，默认为当前目录
     timeout (int): 命令执行的超时时间（秒），默认为30
@@ -504,20 +504,28 @@ def execute_command(command, args=None, cwd=".", timeout=30, capture_output=True
     str: 命令执行结果的字符串表示
     """
     try:
+        # 清理命令中的多余反引号
+        command = command.replace('`', '')
+        
         # 安全检查：禁止执行的危险命令列表
         dangerous_commands = ['rm', 'mv', 'cp', 'chmod', 'chown', 'sudo', 'su', 'passwd', 
                               'shutdown', 'reboot', 'rmdir', 'dd', 'mkfs', 'format']
+        import shlex
+
+        # 统一用 shlex 解析
+        cmd_list = shlex.split(command)
+        if args:
+            cmd_list.extend(shlex.split(args))
+
+        if not cmd_list:
+            return "错误: 空命令"
         
         # 检查命令是否在危险列表中
-        if command in dangerous_commands:
-            return f"错误: 禁止执行危险命令 '{command}'，以保护系统安全"
-        
-        # 构建命令列表
-        cmd_list = [command]
-        if args:
-            cmd_list.extend(args.split())
+        if cmd_list[0] in dangerous_commands:
+            return f"错误: 禁止执行危险命令 '{cmd_list[0]}'，以保护系统安全"
         
         # 执行命令
+        logger.debug(f"执行命令: {''.join(cmd_list)} (工作目录: {cwd})")
         result = subprocess.run(
             cmd_list,
             cwd=cwd,
@@ -548,8 +556,6 @@ def execute_command(command, args=None, cwd=".", timeout=30, capture_output=True
             if e.stderr:
                 error_output += f"标准错误:\n{e.stderr}\n"
         return error_output
-    except FileNotFoundError:
-        return f"错误: 未找到命令 '{command}'"
     except Exception as e:
         return f"错误: {str(e)}"
     
@@ -612,3 +618,43 @@ def ripgrep(pattern, path=".", file_types=None, ignore_case=False, invert_match=
         return f"ripgrep执行失败: {e.stderr}"
     except Exception as e:
         return f"错误: {str(e)}"
+    
+@tool(name="use_mcp_tool", description="使用MCP工具执行操作", group="mcp-tools")
+def use_mcp_tool(mcp_tool_name, **kwargs):
+    """
+    使用MCP工具执行操作
+    
+    参数:
+    mcp_tool_name (str): 要使用的MCP工具名称
+    **kwargs: 工具的具体参数
+    
+    返回:
+    str: MCP工具执行结果
+    """
+    try:
+        # 构建MCP工具输入数据格式
+        import uuid
+        input_data = {
+            "tool_name": mcp_tool_name,
+            "parameters": kwargs,
+            "request_id": f"req_{uuid.uuid4().hex[:8]}"
+        }
+        
+        # 执行MCP工具
+        result = execute_mcp_tool(mcp_tool_name, input_data)
+        
+        # 解析MCP工具输出
+        try:
+            result_json = json.loads(result)
+            if "result" in result_json:
+                return result_json["result"]
+            elif "error" in result_json:
+                return f"MCP工具错误: {result_json['error']}"
+            else:
+                return result
+        except json.JSONDecodeError:
+            # 如果结果不是JSON格式，直接返回
+            return result
+    except Exception as e:
+        logger.error(f"MCP工具调用失败: {str(e)}")
+        return f"工具调用失败: {str(e)}"
