@@ -1,5 +1,6 @@
 from aichecker.workflow import aichecker_workflow
 from aichecker.agents import call_agent_with_memory
+from aichecker.mcp_host import get_mcp_host, stop_all_mcp_servers
 import logging
 import argparse
 import uuid
@@ -112,6 +113,11 @@ def main():
             except Exception as e:
                 print(f"\n发生错误: {str(e)}")
                 print("-" * 50)
+                
+        # 对话结束后，停止所有MCP服务器
+        mcp_host = get_mcp_host()
+        if mcp_host:
+            stop_all_mcp_servers(mcp_host)
     else:
         # 如果没有指定模式，显示帮助信息
         parser.print_help()

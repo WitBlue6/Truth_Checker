@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # 从config模块导入配置加载函数
 from aichecker.config import load_mcp_config
+from aichecker.mcp_host import get_mcp_host
 
 # 工具注册表，用于存储所有已注册的工具
 TOOL_REGISTRY = {}
@@ -575,35 +576,45 @@ def ripgrep(pattern, path=".", file_types=None, ignore_case=False, invert_match=
     except Exception as e:
         return f"错误: {str(e)}"
     
-
 @tool(name="use_mcp_host_tool", description="使用 MCP Host 工具执行操作", group="mcp-tools")
-def use_mcp_host_tool(mcp_server_name, tool_name, **kwargs):
+def use_mcp_host_tool(mcp_server, tool_name, **kwargs):
     """
     使用 MCP Host 工具执行操作
-    
+
     参数:
-    mcp_server_name (str): MCP 服务器名称
+    mcp_server (MCPServerProcess): MCP 服务器进程对象
     tool_name (str): 要使用的工具名称
     **kwargs: 工具的具体参数
-    
-    返回:
-    str: 工具执行结果
     """
     try:
-        from aichecker.mcp_host import mcp_host
-        
-        # 确保 MCP 服务器已启动
-        if not mcp_host.start_mcp_server(mcp_server_name):
-            return f"错误: 无法启动 MCP 服务器 {mcp_server_name}"
-        
-        # 调用 MCP 工具
-        result = mcp_host.call_mcp_tool(mcp_server_name, tool_name, **kwargs)
+        # 情况1：LLM 传来的是字符串服务器名
+        if isinstance(mcp_server, str):
+            mcp_host = get_mcp_host(load_mcp_config())
+            if mcp_host is None:
+                raise RuntimeError("GLOBAL_MCP_HOST 未初始化")
+            if mcp_server not in mcp_host.servers:
+                raise RuntimeError(f"未知 MCP 服务器: {mcp_server}")
+            server = mcp_host.servers[mcp_server]
+
+        # 情况2：你内部已经传了对象
+        else:
+            server = mcp_server
+        # 如果 LLM 传入的 kwargs 里还嵌套了 "kwargs" 字符串，解析成 dict
+        if "kwargs" in kwargs and isinstance(kwargs["kwargs"], str):
+            try:
+                inner_kwargs = json.loads(kwargs["kwargs"])
+            except Exception:
+                inner_kwargs = {}
+        else:
+            inner_kwargs = kwargs
+
+        tool_result = server.call("tools/call", {
+            "name": tool_name,
+            "arguments": inner_kwargs
+        })
         
         # 格式化结果
-        if "error" in result:
-            return f"MCP 工具错误: {result['error']['message']}"
-        else:
-            return json.dumps(result, indent=2, ensure_ascii=False)
+        return json.dumps(tool_result, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"MCP Host 工具调用失败: {str(e)}")
         return f"工具调用失败: {str(e)}"

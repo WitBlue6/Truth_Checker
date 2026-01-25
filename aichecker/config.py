@@ -1,6 +1,7 @@
 import os
 import json
 from dotenv import load_dotenv
+from aichecker.mcp_host import start_all_mcp_servers, stop_all_mcp_servers
 
 load_dotenv()
 
@@ -61,8 +62,20 @@ def load_agent_config(agent_name: str):
                 # 处理mcp-tools
                 if tool == "mcp-tools":
                     mcp_config = load_mcp_config()
-                    available_mcp_servers = list(mcp_config.get("mcpServers", {}).keys())
+                    available_mcp_servers = []
+                    mcp_tools_info = {}  # server_name -> [tool_names]
+                    for server_name, server_cfg in mcp_config.get("mcpServers", {}).items():
+                        available_mcp_servers.append(server_name)
+                        # 启动临时 MCP Host 获取工具列表
+                        temp_host = start_all_mcp_servers({"mcpServers": {server_name: server_cfg}})
+                        tools_on_server = list(temp_host.tools.keys())  # full_tool_name
+                        # 只取实际工具名
+                        tool_names = [t.split(".")[1] if "." in t else t for t in tools_on_server]
+                        mcp_tools_info[server_name] = tool_names
+                        stop_all_mcp_servers(temp_host)
+                        
                     agent_config[agent_key]["available_mcp_servers"] = available_mcp_servers
+                    agent_config[agent_key]["available_mcp_tools"] = mcp_tools_info
             else:
                 updated_tools.append(tool)
         agent_config[agent_key]["available_tools"] = updated_tools
