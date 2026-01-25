@@ -632,6 +632,11 @@ def use_mcp_tool(mcp_tool_name, **kwargs):
     str: MCP工具执行结果
     """
     try:
+        # 检查kwargs是否是字符串格式，如果是则解析
+        if isinstance(kwargs.get('kwargs'), str):
+            import json
+            kwargs = json.loads(kwargs['kwargs'])
+        
         # 构建MCP工具输入数据格式
         import uuid
         input_data = {

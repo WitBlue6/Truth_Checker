@@ -50,8 +50,16 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
         memory_content = load_memory(memory_id)
         
         # 构建消息历史，包括系统提示和记忆内容
+        system_prompt = agent_config[agent_name]["system_prompt"]
+
+        # 添加可用MCP工具信息
+        if "available_mcp_servers" in agent_config[agent_name]:
+            available_mcp_servers = agent_config[agent_name]["available_mcp_servers"]
+            if available_mcp_servers:
+                system_prompt += f"\n\n可用的MCP工具列表：{', '.join(available_mcp_servers)}"
+
         messages = [
-            {"role": "system", "content": agent_config[agent_name]["system_prompt"]}
+            {"role": "system", "content": system_prompt}
         ]
         
         # 添加历史记忆

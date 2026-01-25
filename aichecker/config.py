@@ -61,7 +61,7 @@ def load_agent_config(agent_name: str):
                 # 处理mcp-tools
                 if tool == "mcp-tools":
                     mcp_config = load_mcp_config()
-                    available_mcp_servers = list(mcp_config.get("available_mcp_servers", []))
+                    available_mcp_servers = list(mcp_config.get("mcpServers", {}).keys())
                     agent_config[agent_key]["available_mcp_servers"] = available_mcp_servers
             else:
                 updated_tools.append(tool)

@@ -11,6 +11,10 @@
             },
             "disabled": false,
             "alwaysAllow": []
+        },
+        "ddg-search": {
+            "command": "uvx",
+            "args": ["duckduckgo-mcp-server"]
         }
     }
 }
