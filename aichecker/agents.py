@@ -11,6 +11,7 @@ from aichecker.config import load_model_config, load_agent_config, load_mcp_conf
 from aichecker.tools import TOOL_REGISTRY, execute_tool, get_tools_by_group
 from aichecker.memory import load_memory, save_memory
 from aichecker.task_manager import get_task
+from aichecker.mcp_host import start_all_mcp_servers, stop_all_mcp_servers
 
 # 调用AI代理（带记忆功能）
 def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_per_round=5, max_repeated_tool_calls=3):
@@ -64,6 +65,9 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
         
         # 添加历史记忆
         messages.extend(memory_content)
+
+        # 启动所有MCP服务器
+        start_all_mcp_servers()
 
         # 获取任务列表
         task_list, task_list_id = get_task(prompt, messages, model_config, memory_id)
@@ -220,8 +224,14 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
                     logger.debug(f"检测到工具调用: {function_name}")
                     logger.info(f"模型调用的工具参数: {json.dumps(function_args, ensure_ascii=False)}")
                     
-                    # 执行工具
-                    tool_result = execute_tool(function_name, **function_args)
+                    # 检查是否是MCP工具，如果是则转换为use_mcp_host_tool调用
+                    if function_name in mcp_config["mcpServers"]:
+                        logger.debug(f"检测到MCP工具调用: {function_name}，自动转换为use_mcp_host_tool调用")
+                        mcp_server_name = function_name
+                        tool_result = execute_tool("use_mcp_host_tool", mcp_server_name=mcp_server_name, tool_name=mcp_server_name, **function_args)
+                    else:
+                        # 执行工具
+                        tool_result = execute_tool(function_name, **function_args)
                     
                     logger.info(f"工具执行完成，结果:\n{tool_result}")
                     
@@ -262,6 +272,10 @@ def call_agent_with_memory(agent_name, prompt, memory_id=None, max_tool_calls_pe
         logger.error(f"=== 代理 {agent_name} 调用失败 ===")
         logger.error(f"错误信息: {str(e)}")
         raise
+
+    finally:
+        # 调用完成后，停止所有MCP服务器
+        stop_all_mcp_servers()
 
 # 调用AI代理
 def call_agent(agent_name, prompt):

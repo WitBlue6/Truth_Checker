@@ -58,16 +58,16 @@ def tool(name=None, description=None, group=None):
     return decorator
 
 # 执行注册的工具
-def execute_tool(tool_name, **kwargs):
+def execute_tool(exec_tool_name, **kwargs):
     """执行指定的工具"""
     try:
-        if tool_name not in TOOL_REGISTRY:
-            return f"错误: 未知的工具 '{tool_name}'"
+        if exec_tool_name not in TOOL_REGISTRY:
+            return f"错误: 未知的工具 '{exec_tool_name}'"
         
-        tool_info = TOOL_REGISTRY[tool_name]
+        tool_info = TOOL_REGISTRY[exec_tool_name]
         tool_func = tool_info["function"]
         
-        logger.debug(f"执行工具: {tool_name}")
+        logger.debug(f"执行工具: {exec_tool_name}")
         logger.debug(f"工具参数: {json.dumps(kwargs, ensure_ascii=False)}")
         
         result = tool_func(**kwargs)
@@ -92,50 +92,6 @@ def get_tool_info(tool_name):
 def get_tools_by_group(group_name):
     """获取指定分组的工具"""
     return {name: info for name, info in TOOL_REGISTRY.items() if info["group"] == group_name}
-
-# 执行MCP工具命令
-def execute_mcp_tool(tool_name, input_data):
-    """执行指定的MCP工具命令"""
-    try:
-        mcp_config = load_mcp_config()
-        # 获取工具配置
-        if tool_name not in mcp_config['mcpServers']:
-            return f"错误: 未知的MCP工具 '{tool_name}'"
-        
-        tool_config = mcp_config['mcpServers'][tool_name]
-        
-        # 构建命令
-        cmd = [tool_config['command']]
-        cmd.extend(tool_config.get('args', []))
-        
-        # 设置环境变量
-        env = os.environ.copy()
-        for key, value in tool_config.get('env', {}).items():
-            env[key] = value
-        
-        # 执行命令
-        logger.debug(f"执行MCP命令: {cmd}")
-        logger.debug(f"命令输入: {json.dumps(input_data, ensure_ascii=False)}")
-        
-        process = subprocess.run(
-            cmd,
-            input=json.dumps(input_data, ensure_ascii=False).encode('utf-8'),
-            capture_output=True,
-            text=False,
-            env=env
-        )
-        
-        # 处理输出
-        if process.stdout:
-            result = process.stdout.decode('utf-8')
-        else:
-            result = process.stderr.decode('utf-8') if process.stderr else "命令执行成功但无输出"
-        
-        logger.debug(f"工具结果:\n{result}")
-        return result
-    except Exception as e:
-        logger.error(f"MCP工具调用失败: {str(e)}")
-        return f"工具调用失败: {str(e)}"
 
 # 清理内容中的冗余格式
 def clean_content(content):
@@ -619,47 +575,35 @@ def ripgrep(pattern, path=".", file_types=None, ignore_case=False, invert_match=
     except Exception as e:
         return f"错误: {str(e)}"
     
-@tool(name="use_mcp_tool", description="使用MCP工具执行操作", group="mcp-tools")
-def use_mcp_tool(mcp_tool_name, **kwargs):
+
+@tool(name="use_mcp_host_tool", description="使用 MCP Host 工具执行操作", group="mcp-tools")
+def use_mcp_host_tool(mcp_server_name, tool_name, **kwargs):
     """
-    使用MCP工具执行操作
+    使用 MCP Host 工具执行操作
     
     参数:
-    mcp_tool_name (str): 要使用的MCP工具名称
+    mcp_server_name (str): MCP 服务器名称
+    tool_name (str): 要使用的工具名称
     **kwargs: 工具的具体参数
     
     返回:
-    str: MCP工具执行结果
+    str: 工具执行结果
     """
     try:
-        # 检查kwargs是否是字符串格式，如果是则解析
-        if isinstance(kwargs.get('kwargs'), str):
-            import json
-            kwargs = json.loads(kwargs['kwargs'])
+        from aichecker.mcp_host import mcp_host
         
-        # 构建MCP工具输入数据格式
-        import uuid
-        input_data = {
-            "tool_name": mcp_tool_name,
-            "parameters": kwargs,
-            "request_id": f"req_{uuid.uuid4().hex[:8]}"
-        }
+        # 确保 MCP 服务器已启动
+        if not mcp_host.start_mcp_server(mcp_server_name):
+            return f"错误: 无法启动 MCP 服务器 {mcp_server_name}"
         
-        # 执行MCP工具
-        result = execute_mcp_tool(mcp_tool_name, input_data)
+        # 调用 MCP 工具
+        result = mcp_host.call_mcp_tool(mcp_server_name, tool_name, **kwargs)
         
-        # 解析MCP工具输出
-        try:
-            result_json = json.loads(result)
-            if "result" in result_json:
-                return result_json["result"]
-            elif "error" in result_json:
-                return f"MCP工具错误: {result_json['error']}"
-            else:
-                return result
-        except json.JSONDecodeError:
-            # 如果结果不是JSON格式，直接返回
-            return result
+        # 格式化结果
+        if "error" in result:
+            return f"MCP 工具错误: {result['error']['message']}"
+        else:
+            return json.dumps(result, indent=2, ensure_ascii=False)
     except Exception as e:
-        logger.error(f"MCP工具调用失败: {str(e)}")
+        logger.error(f"MCP Host 工具调用失败: {str(e)}")
         return f"工具调用失败: {str(e)}"

@@ -3,7 +3,7 @@
         "mcp-tools":{
             "name": "mcp-tools",
             "description": "MCP工具",
-            "tools":["use_mcp_tool"]
+            "tools":["use_mcp_host_tool"]
         },
         "agent-tools":{
             "name": "agent-tools",
@@ -24,11 +24,16 @@
             "name": "task-tools",
             "description": "任务工具",
             "tools":["add_task", "update_task_status", "get_task_list"]
+        },
+        "api-tools":{
+            "name": "api-tools",
+            "description": "需要调用API的第三方工具",
+            "tools":["tavily_search"]
         }
     },
     "tools":{
-        "use_mcp_tool":{
-            "name": "use_mcp_tool",
+        "use_mcp_host_tool":{
+            "name": "use_mcp_host_tool",
             "description": "使用MCP工具",
             "instruction": "使用MCP工具来执行指定的操作",
             "group": "mcp-tools",
@@ -114,6 +119,15 @@
             "description": "执行命令",
             "instruction": "执行指定的shell命令",
             "group": "command-tools",
+            "params":{
+                "timeout": 5000
+            }
+        },
+        "tavily_search":{
+            "name": "tavily_search",
+            "description": "Tavily搜索",
+            "instruction": "使用Tavily搜索指定的查询或读取链接内容",
+            "group": "api-tools",
             "params":{
                 "timeout": 5000
             }
